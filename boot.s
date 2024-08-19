@@ -2,8 +2,12 @@
 
 .section .data
 
-welcome: .ascii "Welcome to Noomi's World\n\0"
+welcome: .ascii "Welcome to Noomi's World!\n\0"
+iamhart: .ascii "I am HART \0"
+newline: .ascii "\n\0"
 
+_scratchpad:
+	.skip 1024
 
 .section .text.init
 .global _start
@@ -12,8 +16,22 @@ _start:
 	csrr t0, mhartid # get info about hardware threads (aka cores) 
 	bnez t0, _wait # wait until we are on the 0 thread 
 	call _setup_uart # configure UART in order to write out to the world
+
+	# Welcome
 	la a0, welcome # prep our arg register for the welcome message
 	call _write_uart # write the welcome message 
+
+	# Hart report
+	la a0, iamhart
+	call _write_uart
+	li t0, 0x30 # '0'
+	la a0, _scratchpad # point to our scratchpad memory
+	sb t0, 0(a0) # store '0' into scratchpad first byte
+	call _write_uart # write out the '0' from our scratchpad
+
+	# Newline
+	la a0, newline
+	call _write_uart
 
 	wfi 
 
@@ -35,6 +53,7 @@ _write_uart:
 	j _write_uart # repeat until end of string 
 
 _write_uart_end:
+	ret
 
 _wait:
 	wfi
