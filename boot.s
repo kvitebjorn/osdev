@@ -24,7 +24,7 @@ _start:
 	la a0, welcome # prep our arg register for the welcome message
 	call _write_uart # write the welcome message 
 
-	j _announce
+	j _announce # announce our HART ID
 
 	wfi 
 
@@ -33,9 +33,9 @@ _start:
 #   followed by a newline
 _writeln:
 	mv s0, ra # save return address since we do a `call` ourselves
-	call _write_uart
-	la a0, newline
-	call _write_uart
+	call _write_uart # write the contents of a0 out
+	la a0, newline # point to our newline
+	call _write_uart # write out newline out
 	mv ra, s0 # set the return address back to what it was
 	ret
 
@@ -60,30 +60,30 @@ _write_uart_end:
 	ret
 
 _announce:
-	la t0, _hartlock
-	lb t0, 0(t0)
-	csrr t1, mhartid
-	bne t0, t1, _announce
+	la t0, _hartlock # point to our HART lock space
+	lb t0, 0(t0) # get the current HART lock value
+	csrr t1, mhartid # get the current HART ID
+	bne t0, t1, _announce # loop until we are on the HART ID we want
 
-	la a0, iamhart
-	call _write_uart
+	la a0, iamhart # point to our hart message
+	call _write_uart # write out our hart message
 
-	csrr t0, mhartid
-	li t1, 0x30
-	add t0, t1, t0
-	la a0, _scratchpad
-	sb t0, 0(a0)
-	call _writeln 
+	csrr t0, mhartid # our registers aren't guaranteed to persist, so...
+	li t1, 0x30 # add 0x30 to get the ASCII for our HART ID
+	add t0, t1, t0 # compute the HART ID ASCII
+	la a0, _scratchpad # point to our scratchpad
+	sb t0, 0(a0) # store the HART ID in the scratchpad
+	call _writeln # write out our HART ID from the scratchpad
 	
-	csrr t0, mhartid
-	li t1, 0x01
-	add t1, t0, t1
-	la t2, _hartlock
-	sw t1, 0(t2)
+	csrr t0, mhartid # get the hart id again for incrementing
+	li t1, 0x01 # load a 1 in order to increment our HART lock
+	add t1, t0, t1 # add the 1 to our current HART ID
+	la t2, _hartlock # point to our HART lock space
+	sw t1, 0(t2) # store the new HART ID into our lock that we stop on
 
-	fence
+	fence # synchronizes I/O
 	
-	j _wait
+	j _wait # done
 
 _wait:
 	wfi
