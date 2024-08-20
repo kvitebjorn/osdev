@@ -6,34 +6,38 @@ welcome: .ascii "Welcome to Noomi's World!\n\0"
 iamhart: .ascii "I am HART \0"
 newline: .ascii "\n\0"
 
+_hartlock:
+	.skip 1,0
+
 _scratchpad:
-	.skip 1024
+	.skip 1024,0
 
 .section .text.init
 .global _start
 
 _start:
 	csrr t0, mhartid # get info about hardware threads (aka cores) 
-	bnez t0, _wait # wait until we are on the 0 thread 
+	bnez t0, _announce # wait until we are on the 0 thread 
+
 	call _setup_uart # configure UART in order to write out to the world
 
-	# Welcome
 	la a0, welcome # prep our arg register for the welcome message
 	call _write_uart # write the welcome message 
 
-	# Hart report
-	la a0, iamhart
-	call _write_uart
-	li t0, 0x30 # '0'
-	la a0, _scratchpad # point to our scratchpad memory
-	sb t0, 0(a0) # store '0' into scratchpad first byte
-	call _write_uart # write out the '0' from our scratchpad
-
-	# Newline
-	la a0, newline
-	call _write_uart
+	j _announce
 
 	wfi 
+
+# a0 should contain the address of string to print
+# writeln will write this string to the serial UART device,
+#   followed by a newline
+_writeln:
+	mv s0, ra # save return address since we do a `call` ourselves
+	call _write_uart
+	la a0, newline
+	call _write_uart
+	mv ra, s0 # set the return address back to what it was
+	ret
 
 _setup_uart:
 	li t1, 0x10000001 # UART disable interrupts setting (UART+1)
@@ -54,6 +58,32 @@ _write_uart:
 
 _write_uart_end:
 	ret
+
+_announce:
+	la t0, _hartlock
+	lb t0, 0(t0)
+	csrr t1, mhartid
+	bne t0, t1, _announce
+
+	la a0, iamhart
+	call _write_uart
+
+	csrr t0, mhartid
+	li t1, 0x30
+	add t0, t1, t0
+	la a0, _scratchpad
+	sb t0, 0(a0)
+	call _writeln 
+	
+	csrr t0, mhartid
+	li t1, 0x01
+	add t1, t0, t1
+	la t2, _hartlock
+	sw t1, 0(t2)
+
+	fence
+	
+	j _wait
 
 _wait:
 	wfi
